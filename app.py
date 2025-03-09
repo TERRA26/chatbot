@@ -622,95 +622,6 @@ class ChatbotManager:
 
         return response_data
 
-    def _check_for_escalation_request(self, query: str, response_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Check if the user is requesting to speak with a human agent or if the situation requires escalation"""
-        # Keywords that might indicate frustration or a need for escalation
-        escalation_keywords = [
-            "speak to a human", "talk to a human", "speak to a person", "talk to a person",
-            "speak to someone", "talk to someone", "speak to an agent", "talk to an agent",
-            "speak to a representative", "talk to a representative", "speak to a team member",
-            "talk to a team member", "speak to staff", "talk to staff", "contact me",
-            "get in touch with me", "call me", "email me", "real person", "real human",
-            "not helpful", "useless", "unhelpful", "not working", "frustrated", "annoying",
-            "doesn't work", "doesn't understand", "don't understand", "stupid", "can't help",
-            "manager", "supervisor", "human support", "live chat", "wrong", "incorrect",
-            "not what i asked", "not answering", "waste of time", "terrible", "awful",
-            "ridiculous", "joke", "terrible service", "poor service", "not satisfied",
-            "agent", "representative", "customer service", "help desk", "support team"
-        ]
-
-        # Frustration indicators (punctuation, capitalization, etc.)
-        frustration_patterns = [
-            r'\?{2,}',  # Multiple question marks
-            r'\!{2,}',  # Multiple exclamation marks
-            r'[A-Z]{3,}',  # ALL CAPS (3+ letters)
-            r'\bWHY\b',  # "WHY" in all caps
-            r'\bNOT\b',  # "NOT" in all caps
-            r'\bCAN\'T\b',  # "CAN'T" in all caps
-            r'\bHELP\b'  # "HELP" in all caps
-        ]
-
-        # Check conversation length - proactively offer help for long conversations
-        conversation_too_long = len(self.history) >= 5  # Offer escalation after 5 exchanges
-
-        # Repetition detection (if user repeats the same question)
-        query_lower = query.lower()
-        recent_queries = [entry["query"].lower() for entry in self.history[-3:]] if len(self.history) >= 3 else []
-        repeated_question = any(self._similarity(query_lower, prev_query) > 0.7 for prev_query in recent_queries)
-
-        # Check for explicit escalation keywords
-        explicit_escalation = any(keyword in query_lower for keyword in escalation_keywords)
-
-        # Check for frustration patterns
-        import re
-        frustration_detected = any(re.search(pattern, query) for pattern in frustration_patterns)
-
-        # Determine if escalation is needed
-        escalation_needed = explicit_escalation or frustration_detected or repeated_question or conversation_too_long
-
-        # If we detect an email in the query after escalation was requested
-        if self.escalation_requested and ("@" in query and "." in query.split("@")[1]):
-            # Extract the email address
-            import re
-            email_pattern = r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
-            email_matches = re.findall(email_pattern, query)
-
-            if email_matches:
-                email = email_matches[0]
-                # Send email notification via EmailJS directly from the backend
-                email_sent = self._send_escalation_email(email, query)
-
-                if email_sent:
-                    response_data[
-                        "response"] = f"Thank you! A team member will contact you at {email} shortly. Your conversation has been forwarded to our support team."
-                else:
-                    response_data[
-                        "response"] = f"Thank you for providing your email address ({email}). However, there was an issue sending the notification. A team member will review this conversation and contact you as soon as possible."
-
-                # Reset escalation flag
-                self.escalation_requested = False
-            else:
-                response_data[
-                    "response"] = "I couldn't detect a valid email address. Could you please provide your email address so our team can contact you? For example: yourname@example.com"
-
-        # If escalation is needed but not yet requested, add escalation message
-        elif escalation_needed and not self.escalation_requested:
-            # Different escalation messages based on the trigger
-            if conversation_too_long:
-                escalation_message = "\n\nI notice we've been talking for a while. Would you like me to connect you with a team member who might be able to help further? If so, please provide your email address, and someone will reach out to you directly."
-            elif repeated_question:
-                escalation_message = "\n\nI notice I may not be addressing your question adequately. Would you like to speak with a team member who can help you more directly? If so, please share your email address, and someone will contact you soon."
-            elif explicit_escalation:
-                escalation_message = "\n\nI'd be happy to connect you with a team member. Please provide your email address, and someone will contact you shortly."
-            else:  # frustration detected
-                escalation_message = "\n\nI understand this might be frustrating. Would you like to speak with a team member directly? If so, please provide your email address, and someone will contact you soon."
-
-            # Enhance the response with the appropriate escalation offer
-            response_data["response"] += escalation_message
-            self.escalation_requested = True
-
-        return response_data
-
     def _similarity(self, text1: str, text2: str) -> float:
         """Calculate similarity between two texts (simple method)"""
         # This is a basic implementation - could be improved with better NLP techniques
@@ -726,9 +637,9 @@ class ChatbotManager:
         return len(intersection) / len(union)
 
     def _send_escalation_email(self, user_email: str, last_query: str) -> bool:
-        """Send an escalation email with the conversation history using EmailJS"""
+        """Send an escalation email with the conversation history using EmailJS but with browser-like headers"""
         try:
-            logger.info(f"Sending escalation email for user: {user_email}")
+            logger.info(f"ESCALATION: Starting email escalation process for {user_email}")
 
             # Prepare the conversation history
             conversation = "\n\n".join([
@@ -736,7 +647,7 @@ class ChatbotManager:
                 for entry in self.history
             ])
 
-            # Prepare the request data for EmailJS
+            # Prepare template parameters for EmailJS
             template_params = {
                 "website_url": self.website_url,
                 "user_email": user_email,
@@ -745,53 +656,71 @@ class ChatbotManager:
                 "timestamp": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
             }
 
-            # Prepare the full request body
-            request_data = {
+            # Create the request payload
+            data = {
                 "service_id": EMAILJS_SERVICE_ID,
                 "template_id": EMAILJS_TEMPLATE_ID,
                 "user_id": EMAILJS_PUBLIC_KEY,
                 "template_params": template_params
             }
 
-            # Make the HTTP request to EmailJS
+            # Set headers to mimic a browser request with enhanced headers
+            headers = {
+                "Content-Type": "application/json",
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+                "Origin": "https://www.emailjs.com",  # Changed to emailjs.com
+                "Referer": "https://www.emailjs.com/",  # Changed to emailjs.com
+                "Accept": "application/json, text/plain, */*",
+                "Accept-Language": "en-US,en;q=0.9",
+                "X-Requested-With": "XMLHttpRequest",
+                "sec-ch-ua": '"Google Chrome";v="91", "Chromium";v="91", ";Not A Brand";v="99"',
+                "sec-ch-ua-mobile": "?0",
+                "sec-fetch-dest": "empty",
+                "sec-fetch-mode": "cors",
+                "sec-fetch-site": "same-origin"
+            }
+
+            # Log the full request details
+            logger.info(f"ESCALATION: EmailJS request URL: {EMAILJS_URL}")
+            logger.info(f"ESCALATION: EmailJS request headers: {json.dumps(headers)}")
+            logger.info(f"ESCALATION: EmailJS request payload: {json.dumps(data)}")
+
             try:
-                import requests
-
-                logger.info(f"Sending EmailJS request to {EMAILJS_URL}")
-
-                # Log the template parameters being sent
-                logger.info(f"Email template params: {json.dumps({
-                    'website_url': self.website_url,
-                    'user_email': user_email,
-                    'conversation_length': len(self.history),
-                    'timestamp': time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-                })}")
-
-                headers = {
-                    'Content-Type': 'application/json'
-                }
-
+                # Send the request to EmailJS API
+                logger.info(f"ESCALATION: Sending request to EmailJS...")
                 response = requests.post(
                     EMAILJS_URL,
                     headers=headers,
-                    json=request_data
+                    json=data,
+                    timeout=20
                 )
 
+                # Log the full response
+                logger.info(f"ESCALATION: EmailJS response status code: {response.status_code}")
+                logger.info(f"ESCALATION: EmailJS response headers: {dict(response.headers)}")
+                logger.info(f"ESCALATION: EmailJS response body: {response.text}")
+
+                # Check response
                 if response.status_code == 200:
-                    logger.info(f"Successfully sent escalation email to {user_email}")
+                    logger.info(f"ESCALATION: Successfully sent email to {user_email}")
                     return True
                 else:
                     logger.error(
-                        f"Failed to send email: Status code {response.status_code}, Response: {response.text}")
+                        f"ESCALATION: Failed to send email: Status code {response.status_code}, Response: {response.text}")
                     return False
 
             except Exception as request_error:
-                logger.error(f"Error making EmailJS request: {request_error}")
+                logger.error(f"ESCALATION: Error in email request: {request_error}")
+                import traceback
+                logger.error(f"ESCALATION: Traceback: {traceback.format_exc()}")
                 return False
 
         except Exception as e:
-            logger.error(f"Error preparing escalation email: {e}")
+            logger.error(f"ESCALATION: Error preparing email: {e}")
+            import traceback
+            logger.error(f"ESCALATION: Traceback: {traceback.format_exc()}")
             return False
+
 
     def _analyze_user_sentiment(self, query: str) -> str:
         """
@@ -812,7 +741,8 @@ class ChatbotManager:
             return "frustrated"
 
         # Check for confused language
-        confused_indicators = ["don't understand", "confused", "unclear", "what do you mean", "how does", "explain"]
+        confused_indicators = ["don't understand", "confused", "unclear", "what do you mean", "how does",
+                               "explain"]
         if any(indicator in query_lower for indicator in confused_indicators) or "?" in query:
             return "confused"
 
@@ -961,6 +891,138 @@ class ChatbotManager:
                 "source": self.website_url
             }
 
+    def _check_for_escalation_request(self, query: str, response_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Check if the user is requesting to speak with a human agent or if the situation requires escalation"""
+        # Keywords that might indicate frustration or a need for escalation
+        escalation_keywords = [
+            "speak to a human", "talk to a human", "speak to a person", "talk to a person",
+            "speak to someone", "talk to someone", "speak to an agent", "talk to an agent",
+            "speak to a representative", "talk to a representative", "speak to a team member",
+            "talk to a team member", "speak to staff", "talk to staff", "contact me",
+            "get in touch with me", "call me", "email me", "real person", "real human",
+            "not helpful", "useless", "unhelpful", "not working", "frustrated", "annoying",
+            "doesn't work", "doesn't understand", "don't understand", "stupid", "can't help",
+            "manager", "supervisor", "human support", "live chat", "wrong", "incorrect",
+            "not what i asked", "not answering", "waste of time", "terrible", "awful",
+            "ridiculous", "joke", "terrible service", "poor service", "not satisfied",
+            "agent", "representative", "customer service", "help desk", "support team"
+        ]
+
+        # Frustration indicators (punctuation, capitalization, etc.)
+        frustration_patterns = [
+            r'\?{2,}',  # Multiple question marks
+            r'\!{2,}',  # Multiple exclamation marks
+            r'[A-Z]{3,}',  # ALL CAPS (3+ letters)
+            r'\bWHY\b',  # "WHY" in all caps
+            r'\bNOT\b',  # "NOT" in all caps
+            r'\bCAN\'T\b',  # "CAN'T" in all caps
+            r'\bHELP\b'  # "HELP" in all caps
+        ]
+
+        # Simple check for email in the query - this runs for ALL queries
+        import re
+        has_email = False
+        email = None
+        if "@" in query and "." in query.split("@")[1]:
+            email_pattern = r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
+            email_matches = re.findall(email_pattern, query)
+            if email_matches:
+                has_email = True
+                email = email_matches[0]
+                logger.info(f"ESCALATION: Detected email address in query: {email}")
+
+        # Check conversation length - proactively offer help for long conversations
+        conversation_too_long = len(self.history) >= 5  # Offer escalation after 5 exchanges
+
+        # Repetition detection (if user repeats the same question)
+        query_lower = query.lower()
+        recent_queries = [entry["query"].lower() for entry in self.history[-3:]] if len(self.history) >= 3 else []
+        repeated_question = any(self._similarity(query_lower, prev_query) > 0.7 for prev_query in recent_queries)
+
+        # Check for explicit escalation keywords
+        explicit_escalation = any(keyword in query_lower for keyword in escalation_keywords)
+
+        # Check for frustration patterns
+        frustration_detected = any(re.search(pattern, query) for pattern in frustration_patterns)
+
+        # Determine if escalation is needed
+        escalation_needed = explicit_escalation or frustration_detected or repeated_question or conversation_too_long
+
+        # If we detect an email AND escalation was previously requested, send the email
+        if has_email and self.escalation_requested:
+            logger.info(f"ESCALATION FLOW: Detected email after escalation was requested. Email: {email}")
+
+            # Attempt to send the email
+            try:
+                email_sent = self._send_escalation_email(email, query)
+                logger.info(f"ESCALATION FLOW: Email sending result: {email_sent}")
+
+                if email_sent:
+                    response_data[
+                        "response"] = f"Thank you! A team member will contact you at {email} shortly. Your conversation has been forwarded to our support team."
+                else:
+                    response_data[
+                        "response"] = f"Thank you for providing your email address ({email}). However, there was an issue sending the notification. A team member will review this conversation and contact you as soon as possible."
+
+                # Reset escalation flag
+                self.escalation_requested = False
+
+            except Exception as e:
+                logger.error(f"ESCALATION FLOW: Error sending email: {e}")
+                import traceback
+                logger.error(f"ESCALATION FLOW: Traceback: {traceback.format_exc()}")
+                response_data[
+                    "response"] = f"Thank you for providing your email address. However, there was an error sending the notification. A team member will review this conversation and contact you as soon as possible."
+                self.escalation_requested = False
+
+        # If we see an email but escalation wasn't requested (special handling)
+        elif has_email and not self.escalation_requested:
+            logger.info(
+                f"ESCALATION FLOW: Email detected without prior escalation request. Treating as implicit escalation.")
+            try:
+                email_sent = self._send_escalation_email(email, query)
+                if email_sent:
+                    response_data[
+                        "response"] = f"Thank you for providing your email address. I've forwarded your information to our team, and someone will contact you at {email} shortly."
+                else:
+                    # Continue with normal response - don't override it
+                    pass
+            except Exception as e:
+                logger.error(f"ESCALATION FLOW: Error with implicit email escalation: {e}")
+                # Continue with normal response - don't override it
+                pass
+
+        # If escalation was requested but no email provided yet
+        elif self.escalation_requested and not has_email:
+            logger.info(f"ESCALATION FLOW: Escalation requested but no email provided in this message.")
+            # If the message doesn't contain an email but looks like it might be attempting to provide one
+            if len(query) < 50 and ("@" in query or "mail" in query_lower or "contact" in query_lower):
+                response_data[
+                    "response"] = "I couldn't detect a valid email address. Could you please provide your complete email address so our team can contact you? For example: yourname@example.com"
+
+        # If escalation is needed but not yet requested, add escalation message
+        elif escalation_needed and not self.escalation_requested:
+            # Different escalation messages based on the trigger
+            if conversation_too_long:
+                escalation_message = "\n\nI notice we've been talking for a while. Would you like me to connect you with a team member who might be able to help further? If so, please provide your email address, and someone will reach out to you directly."
+                logger.info("ESCALATION FLOW: Triggering escalation due to long conversation")
+            elif repeated_question:
+                escalation_message = "\n\nI notice I may not be addressing your question adequately. Would you like to speak with a team member who can help you more directly? If so, please share your email address, and someone will contact you soon."
+                logger.info("ESCALATION FLOW: Triggering escalation due to repeated questions")
+            elif explicit_escalation:
+                escalation_message = "\n\nI'd be happy to connect you with a team member. Please provide your email address, and someone will contact you shortly."
+                logger.info("ESCALATION FLOW: Triggering escalation due to explicit request")
+            else:  # frustration detected
+                escalation_message = "\n\nI understand this might be frustrating. Would you like to speak with a team member directly? If so, please provide your email address, and someone will contact you soon."
+                logger.info("ESCALATION FLOW: Triggering escalation due to detected frustration")
+
+            # Enhance the response with the appropriate escalation offer
+            response_data["response"] += escalation_message
+            self.escalation_requested = True
+            logger.info("ESCALATION FLOW: Escalation has been requested")
+
+        return response_data
+
 
 # Initialize chatbot manager with the hard-coded website URL
 chatbot_manager = ChatbotManager(WEBSITE_URL)
@@ -1027,6 +1089,55 @@ async def api_query(query: Query):
         }
 
 
+# EmailJS endpoint for frontend use
+@app.post("/api/send-email")
+async def send_email(request: Request):
+    """Send an email using EmailJS from the frontend"""
+    try:
+        # Get request body
+        data = await request.json()
+
+        # Extract email details
+        user_email = data.get("email")
+        message = data.get("message", "")
+        conversation = data.get("conversation", "")
+
+        if not user_email:
+            return JSONResponse(
+                status_code=400,
+                content={"error": "Email address is required"}
+            )
+
+        logger.info(f"Sending email for: {user_email}")
+
+        # Create EmailJS parameters
+        template_params = {
+            "website_url": WEBSITE_URL,
+            "user_email": user_email,
+            "user_query": message,
+            "conversation": conversation,
+            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+        }
+
+        # Return the data needed for the frontend EmailJS call
+        return {
+            "success": True,
+            "emailjs": {
+                "serviceId": EMAILJS_SERVICE_ID,
+                "templateId": EMAILJS_TEMPLATE_ID,
+                "userId": EMAILJS_PUBLIC_KEY,
+                "templateParams": template_params
+            }
+        }
+
+    except Exception as e:
+        logger.error(f"Error preparing email data: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"error": f"Failed to prepare email: {str(e)}"}
+        )
+
+
 # Basic health check
 @app.get("/health")
 async def health_check():
@@ -1049,3 +1160,5 @@ if __name__ == "__main__":
         port=port,
         log_level="info"
     )
+
+
