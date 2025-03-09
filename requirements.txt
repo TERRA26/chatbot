@@ -1,0 +1,13 @@
+fastapi
+uvicorn
+python-dotenv
+openai
+scikit-learn
+nltk
+beautifulsoup4
+requests
+numpy
+websockets
+pydantic
+colorama
+google-generativeai
