@@ -1,0 +1,253 @@
+/**
+ * Luxe Chatbot Dashboard CSS
+ */
+
+/* Dashboard Structure */
+.luxe-chatbot-dashboard {
+    max-width: 1200px;
+}
+
+.dashboard-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 20px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid #eee;
+}
+
+.dashboard-main {
+    margin-bottom: 40px;
+}
+
+.dashboard-section {
+    background: #fff;
+    border-radius: 5px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    margin-bottom: 30px;
+    padding: 20px;
+    position: relative;
+}
+
+.dashboard-section h2 {
+    margin-top: 0;
+    margin-bottom: 20px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #f0f0f0;
+    font-size: 18px;
+    color: #333;
+}
+
+/* Stats Summary */
+.stats-summary {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 30px;
+    flex-wrap: wrap;
+}
+
+.stat-card {
+    background: #fff;
+    border-radius: 5px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    padding: 20px;
+    flex: 1 1 30%;
+    margin-right: 15px;
+    margin-bottom: 15px;
+    min-width: 200px;
+}
+
+.stat-card:last-child {
+    margin-right: 0;
+}
+
+.stat-card h3 {
+    margin: 0 0 10px 0;
+    font-size: 14px;
+    color: #666;
+}
+
+.stat-card .stat-value {
+    font-size: 32px;
+    font-weight: 700;
+    color: #0077b6;
+}
+
+/* Chart Container */
+.chart-container {
+    height: 300px;
+    margin-bottom: 15px;
+}
+
+/* Common Queries */
+.query-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.query-list li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 0;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.query-list li:last-child {
+    border-bottom: none;
+}
+
+.query-text {
+    flex: 1;
+    margin-right: 15px;
+    font-size: 14px;
+}
+
+.query-count {
+    background: #0077b6;
+    color: white;
+    padding: 3px 8px;
+    border-radius: 20px;
+    font-size: 12px;
+    min-width: 60px;
+    text-align: center;
+}
+
+/* Recent Conversations */
+.conversation-list {
+    max-height: 500px;
+    overflow-y: auto;
+}
+
+.conversation-item {
+    padding: 15px 0;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.conversation-item:last-child {
+    border-bottom: none;
+}
+
+.conversation-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+
+.conversation-date {
+    color: #666;
+    font-size: 13px;
+}
+
+.conversation-count {
+    background: #eee;
+    color: #333;
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-size: 12px;
+}
+
+.first-message {
+    margin: 0;
+    font-size: 14px;
+    color: #333;
+}
+
+/* Actions */
+.actions {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+}
+
+.share-dashboard {
+    margin-top: 15px;
+    text-align: right;
+}
+
+.share-dashboard p {
+    margin: 0 0 5px 0;
+    font-size: 13px;
+    color: #666;
+}
+
+.share-url {
+    width: 300px;
+    padding: 5px;
+    font-size: 13px;
+    margin-right: 5px;
+}
+
+.copy-url {
+    min-width: 60px;
+}
+
+/* Footer */
+.dashboard-footer {
+    padding: 20px 0;
+    border-top: 1px solid #eee;
+    color: #666;
+    font-size: 13px;
+}
+
+/* Loading States */
+.loading {
+    text-align: center;
+    padding: 20px;
+    color: #666;
+}
+
+button.loading {
+    position: relative;
+    color: transparent;
+}
+
+button.loading::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 16px;
+    height: 16px;
+    margin: -8px 0 0 -8px;
+    border: 2px solid rgba(255,255,255,0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 1s infinite linear;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Responsive */
+@media (max-width: 782px) {
+    .dashboard-header {
+        flex-direction: column;
+    }
+    
+    .stats-summary {
+        flex-direction: column;
+    }
+    
+    .stat-card {
+        width: 100%;
+        margin-right: 0;
+    }
+    
+    .actions {
+        margin-top: 20px;
+        align-items: flex-start;
+        width: 100%;
+    }
+    
+    .share-dashboard {
+        width: 100%;
+        text-align: left;
+    }
+    
+    .share-url {
+        width: calc(100% - 70px);
+    }
+}
